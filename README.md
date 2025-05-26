@@ -12,19 +12,5 @@ A simple RESTful API [ed purp], asp core, ef core, sql server.
 - Code quality and style checks (e.g., with dotnet-format, Code Coverage)
 - Ready-to-run with provided scripts/configs
 
-## Getting Started
-
-### Prerequisites
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- [SQL Server](https://www.microsoft.com/en-us/sql-server/sql-server-downloads)
-- [Git](https://git-scm.com/)
-
-### Running the API
-
-```bash
-git clone
-cd [folder]
-dotnet ef database update
-dotnet run
-```
+## Feedback
+- The instructions were clear and the structure matched my expectations for a clean architecture. It took about 10 minutes, including time to adjust namespaces. Code was ready to run, only minor tweaks for my environment (connection string). Did not face any problems.
