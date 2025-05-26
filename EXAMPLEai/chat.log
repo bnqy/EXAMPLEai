@@ -1,0 +1,278 @@
+﻿I am a dotnet developer and I want you to act as senior level dotnet developer. Create a RESTful API to manage a simple todo list application using ASP.NET Core, EF and MS SQL. The application should allow users to create, read, update, and delete todo items. Each item should have a title and a description. Use EF Core to persist the items in the database.
+
+
+ChatGPT said:
+Absolutely! Here’s a professional, senior-level walkthrough to create a RESTful ToDo List API using ASP.NET Core, Entity Framework Core, and SQL Server. The solution will include:
+
+Clean separation of layers (Controller, Service, Data/Repository)
+
+Use of DTOs
+
+Dependency Injection
+
+EF Core code-first approach
+
+This is a modern, minimal but production-grade setup.
+
+1. Project Setup
+sh
+Copy
+Edit
+dotnet new webapi -n TodoApi
+cd TodoApi
+dotnet add package Microsoft.EntityFrameworkCore.SqlServer
+dotnet add package Microsoft.EntityFrameworkCore.Tools
+2. Models
+Entities/TodoItem.cs
+
+csharp
+Copy
+Edit
+public class TodoItem
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+}
+3. Data Context
+Data/AppDbContext.cs
+
+csharp
+Copy
+Edit
+using Microsoft.EntityFrameworkCore;
+
+public class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    public DbSet<TodoItem> TodoItems => Set<TodoItem>();
+}
+4. DTOs
+DTOs/TodoItemDto.cs
+
+csharp
+Copy
+Edit
+public class TodoItemDto
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+}
+
+public class CreateTodoItemDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+}
+5. Repository Layer (Optional, but clean)
+Repositories/ITodoRepository.cs
+
+csharp
+Copy
+Edit
+public interface ITodoRepository
+{
+    Task<List<TodoItem>> GetAllAsync();
+    Task<TodoItem?> GetByIdAsync(int id);
+    Task<TodoItem> AddAsync(TodoItem item);
+    Task UpdateAsync(TodoItem item);
+    Task DeleteAsync(int id);
+}
+Repositories/TodoRepository.cs
+
+csharp
+Copy
+Edit
+public class TodoRepository : ITodoRepository
+{
+    private readonly AppDbContext _context;
+    public TodoRepository(AppDbContext context) => _context = context;
+
+    public async Task<List<TodoItem>> GetAllAsync() =>
+        await _context.TodoItems.ToListAsync();
+
+    public async Task<TodoItem?> GetByIdAsync(int id) =>
+        await _context.TodoItems.FindAsync(id);
+
+    public async Task<TodoItem> AddAsync(TodoItem item)
+    {
+        _context.TodoItems.Add(item);
+        await _context.SaveChangesAsync();
+        return item;
+    }
+
+    public async Task UpdateAsync(TodoItem item)
+    {
+        _context.TodoItems.Update(item);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteAsync(int id)
+    {
+        var item = await GetByIdAsync(id);
+        if (item != null)
+        {
+            _context.TodoItems.Remove(item);
+            await _context.SaveChangesAsync();
+        }
+    }
+}
+6. Service Layer
+Services/ITodoService.cs
+
+csharp
+Copy
+Edit
+public interface ITodoService
+{
+    Task<List<TodoItemDto>> GetAllAsync();
+    Task<TodoItemDto?> GetByIdAsync(int id);
+    Task<TodoItemDto> CreateAsync(CreateTodoItemDto dto);
+    Task<bool> UpdateAsync(int id, CreateTodoItemDto dto);
+    Task<bool> DeleteAsync(int id);
+}
+Services/TodoService.cs
+
+csharp
+Copy
+Edit
+public class TodoService : ITodoService
+{
+    private readonly ITodoRepository _repo;
+    public TodoService(ITodoRepository repo) => _repo = repo;
+
+    public async Task<List<TodoItemDto>> GetAllAsync()
+    {
+        var items = await _repo.GetAllAsync();
+        return items.Select(x => new TodoItemDto
+        {
+            Id = x.Id, Title = x.Title, Description = x.Description
+        }).ToList();
+    }
+
+    public async Task<TodoItemDto?> GetByIdAsync(int id)
+    {
+        var item = await _repo.GetByIdAsync(id);
+        if (item == null) return null;
+        return new TodoItemDto { Id = item.Id, Title = item.Title, Description = item.Description };
+    }
+
+    public async Task<TodoItemDto> CreateAsync(CreateTodoItemDto dto)
+    {
+        var entity = new TodoItem { Title = dto.Title, Description = dto.Description };
+        entity = await _repo.AddAsync(entity);
+        return new TodoItemDto { Id = entity.Id, Title = entity.Title, Description = entity.Description };
+    }
+
+    public async Task<bool> UpdateAsync(int id, CreateTodoItemDto dto)
+    {
+        var entity = await _repo.GetByIdAsync(id);
+        if (entity == null) return false;
+        entity.Title = dto.Title;
+        entity.Description = dto.Description;
+        await _repo.UpdateAsync(entity);
+        return true;
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var entity = await _repo.GetByIdAsync(id);
+        if (entity == null) return false;
+        await _repo.DeleteAsync(id);
+        return true;
+    }
+}
+7. Controller
+Controllers/TodoController.cs
+
+csharp
+Copy
+Edit
+using Microsoft.AspNetCore.Mvc;
+
+[ApiController]
+[Route("api/[controller]")]
+public class TodoController : ControllerBase
+{
+    private readonly ITodoService _service;
+    public TodoController(ITodoService service) => _service = service;
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll() =>
+        Ok(await _service.GetAllAsync());
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var item = await _service.GetByIdAsync(id);
+        return item == null ? NotFound() : Ok(item);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create(CreateTodoItemDto dto)
+    {
+        var item = await _service.CreateAsync(dto);
+        return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, CreateTodoItemDto dto)
+    {
+        var updated = await _service.UpdateAsync(id, dto);
+        return updated ? NoContent() : NotFound();
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var deleted = await _service.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
+    }
+}
+8. Startup/Program.cs Configuration
+Program.cs (for .NET 6+ minimal style)
+
+csharp
+Copy
+Edit
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+builder.Services.AddDbContext<AppDbContext>(opt =>
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddScoped<ITodoRepository, TodoRepository>();
+builder.Services.AddScoped<ITodoService, TodoService>();
+
+var app = builder.Build();
+
+app.MapControllers();
+
+app.Run();
+appsettings.json
+
+json
+Copy
+Edit
+"ConnectionStrings": {
+    "DefaultConnection": "Server=localhost;Database=TodoDb;Trusted_Connection=True;TrustServerCertificate=True;"
+}
+9. EF Core Migration & DB Creation
+sh
+Copy
+Edit
+dotnet ef migrations add InitialCreate
+dotnet ef database update
+10. Test with Swagger/Postman
+When you run the app, Swagger UI should be available at /swagger.
+
+Summary of Endpoints
+Method	Endpoint	Description
+GET	/api/todo	Get all todos
+GET	/api/todo/{id}	Get by id
+POST	/api/todo	Create new todo
+PUT	/api/todo/{id}	Update existing
+DELETE	/api/todo/{id}	Delete
+
+Let me know if you want this as a full GitHub-ready project, or want JWT Auth, user ownership, etc. Just say the word!
